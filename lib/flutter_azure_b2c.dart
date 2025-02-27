@@ -46,7 +46,8 @@ typedef AzureB2CCallback = Future<void> Function(B2COperationResult);
 ///   id-token, ecc).
 ///
 class AzureB2C {
-  static const MethodChannel _channel = const MethodChannel('flutter_azure_b2c');
+  static const MethodChannel _channel =
+      const MethodChannel('flutter_azure_b2c');
 
   static Map<B2COperationSource, List<AzureB2CCallback>> _callbacks = {
     B2COperationSource.INIT: <AzureB2CCallback>[],
@@ -69,7 +70,8 @@ class AzureB2C {
   /// Note:
   ///   * consider to maintain a reference to the callback itself in case in
   ///   your scenario it is necessary to unregister it.
-  static void registerCallback(B2COperationSource source, AzureB2CCallback callback) {
+  static void registerCallback(
+      B2COperationSource source, AzureB2CCallback callback) {
     _callbacks[source]!.add(callback);
   }
 
@@ -84,7 +86,8 @@ class AzureB2C {
   ///   * [AzureB2CCallback]
   ///   * [B2COperationSource]
   ///
-  static void unregisterCallback(B2COperationSource source, AzureB2CCallback callback) {
+  static void unregisterCallback(
+      B2COperationSource source, AzureB2CCallback callback) {
     _callbacks[source]!.remove(callback);
   }
 
@@ -188,15 +191,17 @@ class AzureB2C {
   ///   * [AzureB2CCallback]
   ///   * [B2CConfiguration]
   ///
-  static Future<String> policyTriggerInteractive(String policyName, List<String> scopes, String? loginHint, String? subject) async {
+  static Future<String> policyTriggerInteractive(
+      String policyName, List<String> scopes, String? loginHint) async {
     var tag = GUIDGen.generate();
-    var args = {"tag": tag, "policyName": policyName, "scopes": scopes, "subject": subject, "loginHint": loginHint};
+    var args = {
+      "tag": tag,
+      "policyName": policyName,
+      "scopes": scopes,
+      "loginHint": loginHint
+    };
 
-    var rawRes = await _channel.invokeMethod('policyTriggerInteractive', args);
-
-    if (rawRes != null) {
-      final Map<String, dynamic>? res = json.decode(rawRes);
-    }
+    await _channel.invokeMethod('policyTriggerInteractive', args);
     return tag;
   }
 
@@ -237,17 +242,17 @@ class AzureB2C {
   ///   with respect to the authority setting or if the authentication provider
   ///   is down for some reasons.
   ///
-  static Future<String> policyTriggerSilently(String subject, String policyName, List<String> scopes) async {
+  static Future<String> policyTriggerSilently(
+      String subject, String policyName, List<String> scopes) async {
     var tag = GUIDGen.generate();
-    var args = {"tag": tag, "policyName": policyName, "scopes": scopes, "subject": subject};
+    var args = {
+      "tag": tag,
+      "policyName": policyName,
+      "scopes": scopes,
+      "subject": subject
+    };
 
-    var rawRes = await _channel.invokeMethod('policyTriggerSilently', args);
-    print("AzureB2CCallback [getUserInfo] data: $rawRes");
-    if (rawRes != null) {
-      final Map<String, dynamic>? res = json.decode(rawRes);
-      print("AzureB2CCallback [getUserInfo] data: $res");
-    }
-
+    await _channel.invokeMethod('policyTriggerSilently', args);
     return tag;
   }
 
@@ -334,25 +339,13 @@ class AzureB2C {
   ///   * [B2CAccessToken]
   ///
   static Future<B2CAccessToken?> getAccessToken(String subject) async {
-  //  print("[AzureB2C] [getB2CAccessToken] invoked...");
+    print("[AzureB2C] [getB2CAccessToken] invoked...");
     var args = {"subject": subject};
     var rawRes = await _channel.invokeMethod('getAccessToken', args);
 
     if (rawRes != null) {
       final Map<String, dynamic>? res = json.decode(rawRes);
-    //  print("[AzureB2C] [getB2CAccessToken] data: $res");
-      return B2CAccessToken.fromJson(res!);
-    } else
-      return null;
-  }
-
-  static Future<B2CAccessToken?> getAccessTokenWithoutSubject() async {
-   // print("[AzureB2C] [getB2CAccessToken] invoked...");
-    var rawRes = await _channel.invokeMethod('getAccessTokenWithoutSubject');
-
-    if (rawRes != null) {
-      final Map<String, dynamic>? res = json.decode(rawRes);
-    //  print("[AzureB2C] [getB2CAccessToken] data: $res");
+      print("[AzureB2C] [getB2CAccessToken] data: $res");
       return B2CAccessToken.fromJson(res!);
     } else
       return null;
@@ -380,9 +373,8 @@ class AzureB2C {
 
   static Future<void> _methodCallHandler(MethodCall call) async {
     print("[AzureB2C] Callback received...");
-     print("[AzureB2C] Callbacks data: ${call.arguments}");
     var result = B2COperationResult.fromJson(json.decode(call.arguments));
-   
+    print("[AzureB2C] Callback data: ${json.encode(result)}");
 
     for (var callback in _callbacks[result.source]!) {
       await callback(result);

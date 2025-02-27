@@ -60,7 +60,6 @@ class B2CProvider(
     private var b2cApp: IMultipleAccountPublicClientApplication? = null
     private lateinit var hostName: String
     private lateinit var tenantName: String
-    var accessToken: String = ""
     private lateinit var defaultScopes: List<String>
 
     private val authResults: MutableMap<String, IAuthenticationResult> = mutableMapOf()
@@ -83,9 +82,9 @@ class B2CProvider(
                     var jsonString = PluginUtilities.readRawString(context, configFileId)
                     Log.d("B2CProvider", "[$tag] configuration:\n$jsonString")
                     var json = JSONObject(jsonString)
-                    if (json.has("default_scopes")) {
+                    if (json.has("default_scopes")){
                         var jsonScopes = json.getJSONArray("default_scopes")
-                        defaultScopes = List<String>(jsonScopes.length(), init = { idx: Int ->
+                        defaultScopes = List<String>(jsonScopes.length(), init = {idx: Int  ->
                             jsonScopes.getString(idx)
                         });
                     }
@@ -97,17 +96,12 @@ class B2CProvider(
 
                 override fun onError(exception: MsalException) {
                     Log.d("B2CProvider", "[$tag] Init failed: $exception")
-                    operationListener.onEvent(
-                        B2COperationResult(
-                            tag,
-                            INIT,
-                            B2COperationState.CLIENT_ERROR
-                        )
-                    )
+                    operationListener.onEvent(B2COperationResult(tag, INIT, B2COperationState.CLIENT_ERROR))
                 }
             })
 
     }
+
 
 
     /**
@@ -116,10 +110,8 @@ class B2CProvider(
      * Once the user finishes with the flow, you will also receive an access token containing the
      * claims for the scope you passed in, which you can subsequently use to obtain your resources.
      */
-    fun policyTriggerInteractive(
-        context: Context, activity: Activity, tag: String,
-        policyName: String, scopes: List<String>, loginHint: String?, subject: String?
-    ) {
+    fun policyTriggerInteractive(context: Context, activity: Activity, tag: String,
+                                 policyName: String, scopes: List<String>, loginHint: String?) {
         if (b2cApp == null) {
             return
         }
@@ -131,32 +123,16 @@ class B2CProvider(
 //            loadAccounts(POLICY_TRIGGER_INTERACTIVE)
 //        }
 
-        if (subject.isNullOrEmpty()) {
+        val parameters = AcquireTokenParameters.Builder()
+            .startAuthorizationFromActivity(activity)
+            .fromAuthority(getAuthorityFromPolicyName(policyName))
+            .withScopes(scopes)
+            .withPrompt(Prompt.LOGIN)
+            .withLoginHint(loginHint)
+            .withCallback(authInteractiveCallback(tag))
+            .build()
 
-            val parameters = AcquireTokenParameters.Builder()
-                .startAuthorizationFromActivity(activity)
-                .fromAuthority(getAuthorityFromPolicyName(policyName))
-                .withScopes(scopes)
-                .withPrompt(Prompt.LOGIN)
-                .withLoginHint(loginHint)
-                .withCallback(authInteractiveCallback(tag))
-                .build()
-            b2cApp!!.acquireToken(parameters)
-        } else {
-            var account = authResults[subject]?.account;
-
-
-            val parameters = AcquireTokenParameters.Builder()
-                .startAuthorizationFromActivity(activity)
-                .fromAuthority(getAuthorityFromPolicyName(policyName))
-                .withScopes(scopes)
-                .forAccount(account) // Pass the IAccount object here
-                .withCallback(authInteractiveCallback(tag))
-                .build()
-
-            b2cApp!!.acquireToken(parameters)
-        }
-
+        b2cApp!!.acquireToken(parameters)
     }
 
     /**
@@ -165,25 +141,18 @@ class B2CProvider(
      * Once the operation is completed, you will also receive an access token containing the
      * claims for the scope you passed in, which you can subsequently use to obtain your resources.
      */
-    fun policyTriggerSilently(
-        tag: String,
-        subject: String,
-        policyName: String,
-        scopes: List<String>
-    ) {
+    fun policyTriggerSilently(tag: String, subject: String, policyName: String, scopes: List<String>) {
         if (b2cApp == null) {
             return
         }
 
         var selectedUser: B2CUser? = findB2CUser(subject)
-        selectedUser!!.acquireTokenSilentAsync(
-            b2cApp!!,
+        selectedUser!!.acquireTokenSilentAsync(b2cApp!!,
             hostName,
             tenantName,
             policyName,
             scopes,
-            authSilentCallback(tag)
-        )
+            authSilentCallback(tag))
     }
 
     /**
@@ -207,13 +176,7 @@ class B2CProvider(
 
                 override fun onError(exception: MsalException) {
                     Log.d("B2CProvider", "[$tag] Sign Out error: $exception")
-                    operationListener.onEvent(
-                        B2COperationResult(
-                            tag,
-                            SIGN_OUT,
-                            B2COperationState.CLIENT_ERROR
-                        )
-                    )
+                    operationListener.onEvent(B2COperationResult(tag, SIGN_OUT, B2COperationState.CLIENT_ERROR))
                 }
             })
     }
@@ -223,23 +186,17 @@ class B2CProvider(
      *
      * @return the provider configuration
      */
-    fun getConfiguration(): B2CConfigurationAndroid {
+    fun getConfiguration() : B2CConfigurationAndroid {
         var conf = b2cApp!!.configuration
 
         var authorities: MutableList<B2CAuthority> = mutableListOf(
-            B2CAuthority(
-                conf.defaultAuthority.authorityURL.toString(),
-                conf.defaultAuthority.authorityTypeString, true
-            )
+            B2CAuthority(conf.defaultAuthority.authorityURL.toString(),
+                conf.defaultAuthority.authorityTypeString, true)
         )
-        for (authority in conf.authorities) {
+        for (authority in conf.authorities){
             if (authority.authorityURL != conf.defaultAuthority.authorityURL) {
-                authorities.add(
-                    B2CAuthority(
-                        authority.authorityURL.toString(),
-                        authority.authorityTypeString, false
-                    )
-                )
+                authorities.add(B2CAuthority(authority.authorityURL.toString(),
+                    authority.authorityTypeString, false))
             }
         }
 
@@ -247,10 +204,8 @@ class B2CProvider(
         if (conf.accountMode != null)
             accountMode = conf.accountMode.toString()
 
-        return B2CConfigurationAndroid(
-            conf.clientId, conf.redirectUri,
-            accountMode, conf.useBroker, authorities, defaultScopes
-        )
+        return B2CConfigurationAndroid(conf.clientId, conf.redirectUri,
+                    accountMode, conf.useBroker, authorities, defaultScopes)
     }
 
     /**
@@ -261,8 +216,8 @@ class B2CProvider(
      * @return a list of stored user represented by their subjects
      */
     fun getSubjects(): List<String> {
-        synchronized(this) {
-            var subjects: MutableList<String> = mutableListOf()
+        synchronized(this){
+            var subjects : MutableList<String> = mutableListOf()
             for (user in users!!) {
                 subjects.add(user.subject!!)
             }
@@ -272,7 +227,7 @@ class B2CProvider(
     }
 
     fun hasSubject(subject: String): Boolean {
-        synchronized(this) {
+        synchronized(this){
             if (findB2CUser(subject) == null) return false
             return true
         }
@@ -283,7 +238,7 @@ class B2CProvider(
      * @return the user claims or null if user is not stored
      */
     fun getClaims(subject: String): MutableMap<String, *>? {
-        synchronized(this) {
+        synchronized(this){
             var subUser: B2CUser? = findB2CUser(subject) ?: return null
             return subUser!!.claims
         }
@@ -294,7 +249,7 @@ class B2CProvider(
      * @return the preferred username or null if user is not stored
      */
     fun getUsername(subject: String): String? {
-        synchronized(this) {
+        synchronized(this){
             var subUser: B2CUser? = findB2CUser(subject) ?: return null
             return subUser!!.username
         }
@@ -309,10 +264,6 @@ class B2CProvider(
             if (!authResults.containsKey(subject)) return null
             return authResults[subject]!!.accessToken
         }
-    }
-
-    fun getAccessTokenn(): String {
-        return accessToken;
     }
 
     /**
@@ -339,26 +290,14 @@ class B2CProvider(
         }
         b2cApp!!.getAccounts(object : LoadAccountsCallback {
             override fun onTaskCompleted(result: List<IAccount>) {
-                synchronized(this) {
+                synchronized(this){
                     users = B2CUser.getB2CUsersFromAccountList(result)
                 }
-                operationListener.onEvent(
-                    B2COperationResult(
-                        tag,
-                        source,
-                        B2COperationState.SUCCESS
-                    )
-                )
+                operationListener.onEvent(B2COperationResult(tag, source, B2COperationState.SUCCESS))
             }
 
             override fun onError(exception: MsalException) {
-                operationListener.onEvent(
-                    B2COperationResult(
-                        tag,
-                        source,
-                        B2COperationState.CLIENT_ERROR
-                    )
-                )
+                operationListener.onEvent(B2COperationResult(tag, source, B2COperationState.CLIENT_ERROR))
             }
         })
     }
@@ -372,15 +311,8 @@ class B2CProvider(
         return object : AuthenticationCallback {
             override fun onSuccess(authenticationResult: IAuthenticationResult) {
                 /* Successfully got a token, use it to call a protected resource - MSGraph */
-              /*  Log.d(
-                    "B2CProvider1",
-                    "[$tag] Successfully authenticated ${authenticationResult.getAccessToken()}"
-                )
-                Log.d(
-                    "B2CProvider1",
-                    " Successfully authenticated ${authenticationResult.account.getAuthority()}"
-                )*/
-                accessToken = authenticationResult.getAccessToken();
+                Log.d("B2CProvider", "[$tag] Successfully authenticated")
+
                 /* Stores in memory the access token. Note: refresh token managed by MSAL */
                 var subject = B2CUser.getSubjectFromAccount(authenticationResult.account)
 
@@ -444,11 +376,10 @@ class B2CProvider(
         return object : SilentAuthenticationCallback {
             override fun onSuccess(authenticationResult: IAuthenticationResult) {
                 /* Successfully got a token. */
+                Log.d("B2CProvider", "[$tag] Successfully authenticated")
 
                 /* Stores in memory the access token. Note: refresh token managed by MSAL */
                 var subject = B2CUser.getSubjectFromAccount(authenticationResult.account)
-                accessToken = authenticationResult.getAccessToken();
-            //    Log.d("B2CProvider", "[$tag] Successfully authenticated accessToken:${accessToken}")
 
                 synchronized(authResults) {
                     authResults[subject!!] = authenticationResult
@@ -496,7 +427,6 @@ class B2CProvider(
         }
 
     }
-
     private fun setHostAndTenantFromAuthority(tag: String, authority: Authority) {
         var parts = authority.authorityURL.toString().split(Regex("https://|/"))
         hostName = parts[1]
@@ -504,7 +434,7 @@ class B2CProvider(
         Log.d("B2CProvider", "[$tag] host: $hostName, tenant: $tenantName")
     }
 
-    private fun getAuthorityFromPolicyName(policyName: String): String {
+    private fun getAuthorityFromPolicyName(policyName: String) : String{
         return "https://$hostName/$tenantName/$policyName/"
     }
 }

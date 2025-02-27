@@ -40,11 +40,9 @@ class B2CAccessToken {
   /// Creates an access token from a JSON map.
   ///
   B2CAccessToken.fromJson(Map<String, dynamic> data) {
-    if (data.containsKey("subject"))
     this.subject = data["subject"];
     this.token = data["token"];
-    if (data.containsKey("expire"))
-      this.expireOn = DateTime.parse(data["expire"]).toUtc();
+    this.expireOn = DateTime.parse(data["expire"]).toUtc();
   }
 
   /// Transform the token to a JSON representation.

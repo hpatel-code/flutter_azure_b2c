@@ -35,14 +35,13 @@ public class SwiftFlutterAzureB2cPlugin: NSObject, FlutterPlugin, IB2COperationL
             let policyName = args["policyName"] as! String
             let scopes = args["scopes"] as! [String]
             let tag = args["tag"] as! String
-            let subject = args["subject"] as! String
             var loginHint: String? = nil
-
+            
             if (args.contains(where: { key, value in return key == "loginHint" }) && args["loginHint"] != nil) {
                 loginHint = args["loginHint"] as? String
             }
             
-            provider.policyTriggerInteractive(tag: tag, policyName: policyName, scopes: scopes, loginHint: loginHint, subject: subject)
+            provider.policyTriggerInteractive(tag: tag, policyName: policyName, scopes: scopes, loginHint: loginHint)
             result(nil)
         }
         
@@ -149,27 +148,6 @@ public class SwiftFlutterAzureB2cPlugin: NSObject, FlutterPlugin, IB2COperationL
                 result("SubjectNotExist|SubjectNotAuthenticated: Unable to find authenticated user: \(subject)")
             }
         }
-        else if call.method == "getAccessTokenWithoutSubject" {
-            
-           
-            let accessToken = provider.getAccessTokenWithOutSubject()
-           if let token = accessToken {
-                var decoded: String? = nil
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: [
-                        "token": token,
-                    ], options: [])
-                    decoded = String(data: jsonData, encoding: .utf8)
-                } catch {
-                    print(error.localizedDescription)
-                }
-                result(decoded)
-            }
-            else {
-                result("SubjectNotExist|SubjectNotAuthenticated: Unable to find authenticated user")
-            }
-        }
-        
         else {
             result("NotImplemented")
         }
