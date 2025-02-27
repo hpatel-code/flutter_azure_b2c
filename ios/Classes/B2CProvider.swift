@@ -314,7 +314,7 @@ class B2CProvider {
     
     private func getAuthorityFromPolicyName(tag: String, policyName: String, source: String) -> MSALB2CAuthority? {
         do {
-            let urlString = "https://\(hostName!)/\(tenantName!)/\(policyName)/"
+            let urlString = "https://\(hostName!)/\(tenantName!)/\(policyName)"
             let authorityURL = URL(string: urlString)!
             return try MSALB2CAuthority(url: authorityURL)
         }

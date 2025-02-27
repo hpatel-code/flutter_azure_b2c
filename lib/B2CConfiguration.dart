@@ -44,7 +44,9 @@ class B2CAuthority {
 
   /// Creates a [B2CAuthority] from a JSON map.
   B2CAuthority.fromJson(Map<String, dynamic> data) {
-    this.authorityURL = data["authority_url"];
+    if (data.containsKey("authority_url"))
+      this.authorityURL = data["authority_url"];
+    else if (data.containsKey("a")) this.authorityURL = data["a"];
     if (data.containsKey("type"))
       this.authorityType = data["type"];
     else
@@ -75,16 +77,16 @@ class B2CConfiguration {
   late final String redirectURI;
 
   /// Cache location (web only).
-  late final String? cacheLocation;
+  String? cacheLocation = '';
 
   /// Interaction mode [redirect|popup] (web only).
-  late final String? interactionMode;
+  String? interactionMode = '';
 
   /// Application account mode [SINGLE|MULTIPLE].
   late final String? accountMode;
 
   /// Broker mode (mobile only).
-  late final bool? brokerRedirectUriRegistered;
+  bool? brokerRedirectUriRegistered = true;
 
   /// List of known authorities.
   late final List<B2CAuthority> authorities;
@@ -107,12 +109,24 @@ class B2CConfiguration {
 
   /// Creates a [B2CConfiguration] from a JSON map.
   B2CConfiguration.fromJson(Map<String, dynamic> data) {
-    this.clientId = data["client_id"];
-    this.redirectURI = data["redirect_uri"];
+    if (data.containsKey("client_id"))
+      this.clientId = data["client_id"];
+    else
+      this.clientId = data["a"];
+    if (data.containsKey("redirect_uri"))
+      this.redirectURI = data["redirect_uri"];
+    else
+      this.redirectURI = data["b"];
+
     this.authorities = <B2CAuthority>[];
-    for (Map<String, dynamic> authData in data["authorities"]) {
-      this.authorities.add(B2CAuthority.fromJson(authData));
-    }
+    if (data.containsKey("authorities"))
+      for (Map<String, dynamic> authData in data["authorities"]) {
+        this.authorities.add(B2CAuthority.fromJson(authData));
+      }
+    else
+      for (Map<String, dynamic> authData in data["e"]) {
+        this.authorities.add(B2CAuthority.fromJson(authData));
+      }
 
     if (data.containsKey("cache_location"))
       this.cacheLocation = data["cache_location"];
@@ -122,13 +136,22 @@ class B2CConfiguration {
 
     if (data.containsKey("account_mode"))
       this.accountMode = data["account_mode"];
+    else if (data.containsKey("c")) this.accountMode = data["c"];
 
     if (data.containsKey("broker_redirect_uri_registered"))
       this.brokerRedirectUriRegistered = data["broker_redirect_uri_registered"];
+    else if (data.containsKey("d"))
+      this.brokerRedirectUriRegistered = data["d"];
 
     if (data.containsKey("default_scopes")) {
       List<String> defaultScopesData = [];
       for (var scope in data["default_scopes"]) {
+        defaultScopesData.add(scope as String);
+      }
+      this.defaultScopes = defaultScopesData;
+    } else if (data.containsKey("f")) {
+      List<String> defaultScopesData = [];
+      for (var scope in data["f"]) {
         defaultScopesData.add(scope as String);
       }
       this.defaultScopes = defaultScopesData;
