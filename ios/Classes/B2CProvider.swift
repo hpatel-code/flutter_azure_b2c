@@ -9,25 +9,25 @@ import Foundation
 import MSAL
 
 class B2CProvider {
-    
+
     var operationListener: IB2COperationListener
     var controller: FlutterViewController
-    
+
     var b2cApp: MSALPublicClientApplication?
     var b2cConfig: B2CConfigurationIOS?
     var webViewParameters : MSALWebviewParameters?
     var users: [B2CUser]?
-    
     var hostName: String!
     var tenantName: String!
     var defaultScopes: [String]!
     var authResults: [String: MSALResult] = [:]
-    
+    var accessToken: String!
+
     init(operationListener: IB2COperationListener, controller: FlutterViewController) {
         self.operationListener = operationListener
         self.controller = controller
     }
-    
+
     /**
      * Init B2C application. It looks for existing accounts and retrieves information.
      */
@@ -36,27 +36,27 @@ class B2CProvider {
             do {
                 let data = try Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe)
                 let jsonResult = try JSONSerialization.jsonObject(with: data, options: .mutableLeaves)
-                
+
                 if let jsonResult = jsonResult as? Dictionary<String, AnyObject> {
                     let clientId = jsonResult["client_id"] as! String
                     let redirectUri = jsonResult["redirect_uri"] as! String
                     let accountMode = jsonResult["account_mode"] as! String
                     let brokerRedirectUriRegistered = jsonResult["broker_redirect_uri_registered"] as! Bool
                     var authorities: [B2CAuthority] = []
-                    
+
                     if let authorityDicts = jsonResult["authorities"] as? [Dictionary<String, AnyObject>] {
                         authorityDicts.forEach { dictionary in
                             authorities.append(B2CAuthority(fromDictionary: dictionary))
                         }
                     }
-                    
+
                     if let scopes = jsonResult["default_scopes"] as? [String] {
                         defaultScopes = []
                         scopes.forEach { scope in
                             defaultScopes?.append(scope)
                         }
                     }
-                    
+
                     b2cConfig = B2CConfigurationIOS(
                         clientId: clientId,
                         redirectUri: redirectUri,
@@ -65,9 +65,9 @@ class B2CProvider {
                         authorities: authorities,
                         defaultScopes: defaultScopes
                     )
-                    
+
                     if let kAuthority = b2cConfig?.authorities.first?.authorityUrl {
-                        
+
                         guard let authorityURL = URL(string: kAuthority) else {
                             // handle error (authority url could not be parsed)
                             return
@@ -84,10 +84,10 @@ class B2CProvider {
                             let authority = try MSALB2CAuthority(url: authorityURL!)
                             return authority
                         })
-                        
+
                         self.b2cApp = try MSALPublicClientApplication(configuration: msalConfiguration)
                         self.setHostAndTenantFromAuthority(tag: tag, authority: b2cApp!.configuration.authority)
-                        
+
                         self.initWebViewParams()
                         self.loadAccounts(tag: tag, source: B2CProvider.INIT)
                     }
@@ -122,34 +122,84 @@ class B2CProvider {
             }
         }
     }
-    
+
     /**
      * Runs user flow interactively.
      *
      * Once the user finishes with the flow, you will also receive an access token containing the
      * claims for the scope you passed in, which you can subsequently use to obtain your resources.
      */
-    func policyTriggerInteractive(tag: String, policyName: String, scopes: [String], loginHint: String?) {
-        guard let b2cApp = self.b2cApp else { return }
-        guard let webViewParameters = self.webViewParameters else { return }
-        
-        let parameters = MSALInteractiveTokenParameters(scopes: scopes, webviewParameters: webViewParameters)
-        parameters.promptType = .login
-        parameters.loginHint = loginHint
-        if let authority = getAuthorityFromPolicyName(
-            tag: tag,
-            policyName: policyName,
-            source: B2CProvider.POLICY_TRIGGER_INTERACTIVE
-        ) {
-            parameters.authority = authority
+     func policyTriggerInteractive(tag: String, policyName: String, scopes: [String], loginHint: String?, subject: String?) {
+            guard let b2cApp = self.b2cApp, let webViewParameters = self.webViewParameters else {
+                print("B2CProvider: Error - Missing b2cApp or webViewParameters.")
+                return
+            }
+
+            // Create parameters with common settings
+            let parameters = MSALInteractiveTokenParameters(scopes: scopes, webviewParameters: webViewParameters)
+            parameters.loginHint = loginHint
+
+            // Fetch authority based on policy name and tag
+            if let authority = getAuthorityFromPolicyName(tag: tag, policyName: policyName, source: (findB2CUser(subject: subject!) != nil ? B2CProvider.POLICY_TRIGGER_SILENTLY : B2CProvider.POLICY_TRIGGER_INTERACTIVE)) {
+                parameters.authority = authority
+                print("B2CProvider1: Authority set to \(authority)")
+            } else {
+                print("B2CProvider1: Failed to get authority for policy \(policyName)")
+                return
+            }
+
+            // Handling for logged-in user (subject found)
+            if let selectedUser = findB2CUser(subject: subject!) {
+                // Get MSALAccount from selectedUser (make sure to extract it correctly based on your implementation)
+                if let msalAccount = convertToMSALAccount(from: selectedUser) {
+                    parameters.account = msalAccount
+                } else {
+                    parameters.promptType = .login // Forces login prompt
+                    print("B2CProvider1 if Error: Unable to convert B2CUser to MSALAccount.")
+                    return
+                }
+
+                print("B2CProvider1 if Triggering password change for user: \(subject ?? "Unknown")")
+            } else {
+                print("B2CProvider1 else policyTriggerInteractive - Subject: \(subject ?? "nil")")
+
+                // Configure the account if subject is not nil and non-empty
+                if let subject = subject, !subject.isEmpty, let account = authResults[subject]?.account {
+                    parameters.account = account
+                    print("B2CProvider1:else Using account for subject \(subject) with account: \(account)")
+                } else {
+                    parameters.promptType = .login // Forces login prompt
+                    print("B2CProvider1:else No account found for subject \(subject ?? "nil") - proceeding without account")
+                }
+            }
+
+            // Start the token acquisition
+            b2cApp.acquireToken(with: parameters) { result, error in
+                if let error = error {
+                    print("Error in token acquisition: \(error.localizedDescription)")
+                } else if let result = result {
+                    print("Token acquisition successful - Access token: \(result.accessToken)")
+                } else {
+                    print("Unexpected state - No result and no error.")
+                }
+
+                // Callback function execution
+                self.authInteractiveCallback(tag: tag)(result, error)
+            }
         }
-        
-        b2cApp.acquireToken(
-            with: parameters,
-            completionBlock: authInteractiveCallback(tag: tag)
-        )
+
+
+    // Convert B2CUser to MSALAccount (example function, modify based on your actual B2CUser structure)
+    func convertToMSALAccount(from b2cUser: B2CUser) -> MSALAccount? {
+        // Example: Retrieve the account from your B2CUser (modify based on actual data structure)
+        guard let account = b2cUser.accounts.first else {
+            return nil
+        }
+        return account // This should return an MSALAccount
     }
-    
+
+
+
     /**
      * Run user flow silently using stored refresh token.
      *
@@ -158,7 +208,7 @@ class B2CProvider {
      */
     func policyTriggerSilently(tag: String, subject: String, policyName: String, scopes: [String]) {
         if b2cApp == nil { return }
-        
+
         if let selectedUser = findB2CUser(subject: subject) {
             if let authority = getAuthorityFromPolicyName(
                 tag: tag,
@@ -175,7 +225,7 @@ class B2CProvider {
             }
         }
     }
-    
+
     /**
      * Sign out user and erases associated tokens
      *
@@ -200,7 +250,7 @@ class B2CProvider {
             }
         }
     }
-    
+
     /**
      * Get provider configuration.
      *
@@ -209,7 +259,7 @@ class B2CProvider {
     func getConfiguration() -> B2CConfigurationIOS {
         return b2cConfig!
     }
-    
+
     /**
      * Returns a list of stored subjects. Each subject represents a stored B2C user.
      *
@@ -224,7 +274,7 @@ class B2CProvider {
         }
         return subjects
     }
-    
+
     func hasSubject(subject: String) -> Bool {
         return findB2CUser(subject: subject) != nil
     }
@@ -237,7 +287,7 @@ class B2CProvider {
         let subUser: B2CUser? = findB2CUser(subject: subject)
         return subUser?.claims ?? nil
     }
-    
+
     /**
      * Get user preferred username.
      * @return the preferred username or null if user is not stored
@@ -246,7 +296,7 @@ class B2CProvider {
         let subUser: B2CUser? = findB2CUser(subject: subject)
         return subUser?.username ?? nil
     }
-    
+
     /**
      * Get the last access token obtained for the user.
      * @return the accessToken or null if user is not logged in
@@ -255,7 +305,12 @@ class B2CProvider {
         if !authResults.contains(where: { key, value in key == subject }) { return nil }
         return authResults[subject]!.accessToken
     }
-    
+
+    func getAccessTokenWithOutSubject() -> String? {
+        return self.accessToken
+    }
+
+
     /**
      * Get the expire date of the last access token obtained for the user.
      * @return the expire date or null if user is not logged in
@@ -264,23 +319,23 @@ class B2CProvider {
         if !authResults.contains(where: { key, value in key == subject }) { return nil }
         return authResults[subject]!.expiresOn
     }
-    
+
     private func findB2CUser(subject: String) -> B2CUser? {
         return users!.first { user in
             return user.subject == subject
         }
     }
-    
+
     /**
      * Load signed-in accounts, if there are any present.
      */
     private func loadAccounts(tag: String, source: String) {
         if (b2cApp == nil) { return }
-        
+
         let msalParameters = MSALAccountEnumerationParameters()
         msalParameters.completionBlockQueue = DispatchQueue.main
         msalParameters.returnOnlySignedInAccounts = true
-        
+
         b2cApp!.accountsFromDevice(for: msalParameters) { accs, err in
             if let error = err {
                 print("[B2CProvider] Error loading accounts. Please ensure you have added keychain " +
@@ -304,14 +359,14 @@ class B2CProvider {
             }
         }
     }
-    
+
     private func setHostAndTenantFromAuthority(tag: String, authority: MSALAuthority) {
         let parts = authority.url.absoluteString.split(usingRegex: "https://|/")
         hostName = parts[1]
         tenantName = parts[2]
         print("B2CProvider [\(tag)] host: \(hostName ?? "nil"), tenant: \(tenantName ?? "nil")")
     }
-    
+
     private func getAuthorityFromPolicyName(tag: String, policyName: String, source: String) -> MSALB2CAuthority? {
         do {
             let urlString = "https://\(hostName!)/\(tenantName!)/\(policyName)"
@@ -328,7 +383,7 @@ class B2CProvider {
             return nil
         }
     }
-    
+
     /**
      * Callback used for interactive request.
      * If succeeds we use the access token to call the Microsoft Graph.
@@ -339,6 +394,7 @@ class B2CProvider {
             if let result = res {
                 /* Successfully got a token, use it to call a protected resource - MSGraph */
                 print("[B2CProvider] Successfully authenticated.")
+                self.accessToken = result.accessToken
                 /* Stores in memory the access token. Note: refresh token managed by MSAL */
                 if let subject = B2CUser.getSubjectFromAccount(account: result.account) {
                     self.authResults[subject] = result
@@ -352,7 +408,7 @@ class B2CProvider {
                 /* Reload account asynchronously to get the up-to-date list. */
                 self.loadAccounts(tag: tag, source: B2CProvider.POLICY_TRIGGER_INTERACTIVE)
             }
-            
+
             if let error = err {
                 if error.localizedDescription.contains(B2CProvider.B2C_PASSWORD_CHANGE) {
                     self.operationListener.onEvent(operationResult: B2COperationResult(
@@ -378,7 +434,7 @@ class B2CProvider {
             }
         }
     }
-    
+
     /**
      * Callback used in for silent acquireToken calls.
      */
@@ -387,6 +443,9 @@ class B2CProvider {
             if let result = res {
                 /* Successfully got a token, use it to call a protected resource - MSGraph */
                 print("[B2CProvider] Successfully authenticated.")
+
+                                self.accessToken = result.accessToken
+
                 /* Stores in memory the access token. Note: refresh token managed by MSAL */
                 if let subject = B2CUser.getSubjectFromAccount(account: result.account) {
                     self.authResults[subject] = result
@@ -400,7 +459,7 @@ class B2CProvider {
                 /* Reload account asynchronously to get the up-to-date list. */
                 self.loadAccounts(tag: tag, source: B2CProvider.POLICY_TRIGGER_SILENTLY)
             }
-            
+
             if let error = err {
                 if error.localizedDescription.contains(B2CProvider.B2C_PASSWORD_CHANGE) {
                     self.operationListener.onEvent(operationResult: B2COperationResult(
@@ -426,11 +485,11 @@ class B2CProvider {
             }
         }
     }
-    
+
     private func initWebViewParams() {
         self.webViewParameters = MSALWebviewParameters(authPresentationViewController: controller)
     }
-    
+
     static let B2C_PASSWORD_CHANGE = "AADB2C90118"
     static let INIT = "init"
     static let POLICY_TRIGGER_SILENTLY = "policy_trigger_silently"
