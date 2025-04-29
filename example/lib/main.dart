@@ -59,7 +59,7 @@ class _MyAppState extends State<MyApp> {
                       var data = await AzureB2C.policyTriggerInteractive(
                           _configuration!.defaultAuthority.policyName,
                           _configuration!.defaultScopes!,
-                          null);
+                          null,'');
                       setState(() {
                         _retdata = data;
                       });

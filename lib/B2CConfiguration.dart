@@ -46,7 +46,8 @@ class B2CAuthority {
   B2CAuthority.fromJson(Map<String, dynamic> data) {
     if (data.containsKey("authority_url"))
       this.authorityURL = data["authority_url"];
-    else if (data.containsKey("a")) this.authorityURL = data["a"];
+  else  if (data.containsKey("a"))
+      this.authorityURL = data["a"];
     if (data.containsKey("type"))
       this.authorityType = data["type"];
     else
@@ -77,16 +78,16 @@ class B2CConfiguration {
   late final String redirectURI;
 
   /// Cache location (web only).
-  String? cacheLocation = '';
+    String? cacheLocation='';
 
   /// Interaction mode [redirect|popup] (web only).
-  String? interactionMode = '';
+    String? interactionMode='';
 
   /// Application account mode [SINGLE|MULTIPLE].
   late final String? accountMode;
 
   /// Broker mode (mobile only).
-  bool? brokerRedirectUriRegistered = true;
+    bool? brokerRedirectUriRegistered=true;
 
   /// List of known authorities.
   late final List<B2CAuthority> authorities;
@@ -109,6 +110,11 @@ class B2CConfiguration {
 
   /// Creates a [B2CConfiguration] from a JSON map.
   B2CConfiguration.fromJson(Map<String, dynamic> data) {
+    print("[AzureB2C] Callback fromJson...client_id: ${data["client_id"]}");
+
+    // For release i got data like below that's why we used a,b,c and so on..
+    // data: {a: 51e65039-3f7b-43c0-a846-12e51e9bc9ff, b: msauth://com.find_a_hunt/vX5KAHBKaRbQYL9QUK6pl6vO%2BWE%3D, c: MULTIPLE, d: true, e: [{a: https://fahdev.b2clogin.com/fahdev.onmicrosoft.com/B2C_1_MobileApp, type: B2C, default: true}], f: [51e65039-3f7b-43c0-a846-12e51e9bc9ff]}
+
     if (data.containsKey("client_id"))
       this.clientId = data["client_id"];
     else
@@ -121,26 +127,28 @@ class B2CConfiguration {
     this.authorities = <B2CAuthority>[];
     if (data.containsKey("authorities"))
       for (Map<String, dynamic> authData in data["authorities"]) {
-        this.authorities.add(B2CAuthority.fromJson(authData));
-      }
+      this.authorities.add(B2CAuthority.fromJson(authData));
+    }
     else
-      for (Map<String, dynamic> authData in data["e"]) {
-        this.authorities.add(B2CAuthority.fromJson(authData));
-      }
+    for (Map<String, dynamic> authData in data["e"]) {
+      this.authorities.add(B2CAuthority.fromJson(authData));
+    }
 
-    if (data.containsKey("cache_location"))
-      this.cacheLocation = data["cache_location"];
+
+
 
     if (data.containsKey("interaction_mode"))
       this.interactionMode = data["interaction_mode"];
 
     if (data.containsKey("account_mode"))
       this.accountMode = data["account_mode"];
-    else if (data.containsKey("c")) this.accountMode = data["c"];
+
+   else if (data.containsKey("c"))
+      this.accountMode = data["c"];
 
     if (data.containsKey("broker_redirect_uri_registered"))
       this.brokerRedirectUriRegistered = data["broker_redirect_uri_registered"];
-    else if (data.containsKey("d"))
+  else if (data.containsKey("d"))
       this.brokerRedirectUriRegistered = data["d"];
 
     if (data.containsKey("default_scopes")) {
@@ -149,13 +157,16 @@ class B2CConfiguration {
         defaultScopesData.add(scope as String);
       }
       this.defaultScopes = defaultScopesData;
-    } else if (data.containsKey("f")) {
+    }
+
+  else  if (data.containsKey("f")) {
       List<String> defaultScopesData = [];
       for (var scope in data["f"]) {
         defaultScopesData.add(scope as String);
       }
       this.defaultScopes = defaultScopesData;
     }
+    print("[AzureB2C] Callback fromJson...defaultScopes: ${defaultScopes} client_id: ${clientId}");
   }
 
   /// Returns a JSON representation.
@@ -166,7 +177,6 @@ class B2CConfiguration {
       "client_id": clientId,
       "redirect_uri": redirectURI,
       "authorities": authoritiesMap,
-      "cache_location": cacheLocation != null ? cacheLocation : null,
       "interaction_mode": interactionMode != null ? interactionMode : null,
       "account_mode": accountMode != null ? accountMode : null,
       "broker_redirect_uri_registered": brokerRedirectUriRegistered != null
